@@ -12,11 +12,14 @@ LDFLAGS = -mcpu=cortex-m0 -mthumb -nostartfiles -gc-sections
 DEPS = main.h own_std.h flash.h
 OBJ = stm32init.o main.o own_std.o flash.o
 ASMS = stm32init.s main.s own_std.s flash.s
+STACK_USE = stm32init.su main.su own_std.su flash.su
 
 all: main.bin
 
 %.o: %.c $(DEPS)
 	$(CC) -c -o $@ $< $(CFLAGS)
+clean: 
+	rm $(OBJ) $(STACK_USE)
 
 main.bin: $(OBJ)
 	$(LD) -Tstm32.ld $(LDFLAGS) -o main.elf $^
