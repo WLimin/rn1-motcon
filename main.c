@@ -121,13 +121,13 @@ typedef union
 		uint16_t state;
 		int16_t speed;
 		int16_t cur_limit;
-		uint16_t res3;
-		uint16_t res4;
-		uint16_t res5;
+        uint16_t res3;		//imax(H8), feedfwd(Low8)
+        uint16_t res4;		//pterm(H8), iterm(Low8)
+        uint16_t res5;		//dterm(H8)
 		uint16_t res6;
 		uint16_t magic;
 	};
-	uint16_t u16[SPI_DATAGRAM_LEN];
+    uint16_t u16[SPI_DATAGRAM_LEN];	//Flash Magic
 	int16_t s16[SPI_DATAGRAM_LEN];
 } spi_rx_t;
 
@@ -215,7 +215,7 @@ void delay_us(uint32_t i) __attribute__((section(".flasher")));
 void delay_us(uint32_t i)
 {
 	if(i==0) return;
-	i *= 7;
+	i *= 7;  //@48 MHz
 	i -= 7;
 	while(i--)
 		__asm__ __volatile__ ("nop");
@@ -356,12 +356,12 @@ void run_dccal()
 	delay_ms(10);
 	for(i = 0; i < 128; i++)
 	{
-		while(!(DMA1->ISR & 1)) ; // Wait for DMAch1 transfer complete
+		while(!(DMA1->ISR & DMA_ISR_GIF1)) ; // Wait for DMAch1 transfer complete
 		b += latest_adc[0].cur_b + latest_adc[1].cur_b;
 		c += latest_adc[0].cur_c + latest_adc[1].cur_c;
 	}
 	DIS_DCCAL();
-	dccal_b = b>>8;
+        dccal_b = b >> 8; //div 256 for avg
 	dccal_c = c>>8;
 	delay_ms(10);
 }
@@ -374,7 +374,7 @@ static volatile uint8_t pid_p = 80;
 static volatile uint8_t pid_i = 50;
 static volatile uint8_t pid_d = 50;
 
-
+// 23.4 kHz = 42.735 us
 void tim1_inthandler()
 {
 	static int reverse = 0;
@@ -392,7 +392,7 @@ void tim1_inthandler()
 	static int resync = 5;
 	static int16_t pos_info;
 	static int prev_ferr = 0;
-	static int f = 0;
+        static int f = 0;				//freq
 	static int loc;
 	static int pid_f_set;
 	static int64_t pid_integral = 0;
@@ -611,18 +611,18 @@ void tim1_inthandler()
 
 int main()
 {
-	RCC->CFGR = 0b1010UL << 18; // PLL x12 (because of /2 prediv)  --> 48 MHz
-	RCC->CR |= 1UL << 24; // PLL on
-	RCC->CFGR |= 0b10; // Change PLL to system clock
+	RCC->CFGR = RCC_CFGR_PLLMUL12; // PLL x12 (because of /2 prediv)  --> 48 MHz
+	RCC->CR |= RCC_CR_PLLON; // PLL on
+	RCC->CFGR |= RCC_CFGR_SW_PLL; // Change PLL to system clock
 
-	while(!(RCC->CR & 1UL<<25)) ; // Wait for PLL
+	while(!(RCC->CR & RCC_CR_PLLRDY)) ; // Wait for PLL
 
-	while((RCC->CFGR & (0b11UL<<2)) != (0b10UL<<2)) ; // Wait for switchover to PLL.
+	while((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_1) ; // Wait for switchover to PLL.
 
 
-	RCC->AHBENR |= 1UL<<22 /* PORTF clock */ | 1UL<<18 /* PORTB clock */ | 1UL<<17 /* PORTA clock */ | 1UL<<0 /*DMA*/;
-	RCC->APB2ENR |= 1UL<<11 /*TIM1*/ | 1UL<<9 /*ADC*/ | 1UL<<12 /*SPI1*/;
-	RCC->APB1ENR |= 1UL<<29 /*DAC*/;
+	RCC->AHBENR |= RCC_AHBENR_GPIOFEN /* PORTF clock */ | RCC_AHBENR_GPIOBEN /* PORTB clock */ | RCC_AHBENR_GPIOAEN /* PORTA clock */ | RCC_AHBENR_DMAEN /*DMA*/;
+	RCC->APB2ENR |= RCC_APB2ENR_TIM1EN /*TIM1*/ | RCC_APB2ENR_ADCEN /*ADC*/ | RCC_APB2ENR_SPI1EN /*SPI1*/;
+	RCC->APB1ENR |= RCC_APB1ENR_DACEN /*DAC*/;
 	             // Mode:
 		     // 00 = General Purpose In
 	             // 01 = General Purpose Out
@@ -633,16 +633,16 @@ int main()
 	             // 00 = low, 01 = medium, 11 = high
 	             //    15141312111009080706050403020100
 	             //     | | | | | | | | | | | | | | | |
-	GPIOA->MODER   = 0b10000001011010101011111111111111;
-	GPIOA->OSPEEDR = 0b00000000000101010100000000000000;
-	GPIOA->PUPDR   = 0b00010100000000000000000000000000;
+	GPIOA->MODER   = 0b10000001011010101011111111111111; //A0~6 is  Analog in (to ADC) A7~10,A15 is AF A11,A12 is out;A13,A14 is input.
+	GPIOA->OSPEEDR = 0b00000000000101010100000000000000; //A7~10 is speed medium,A15 is speed low.
+	GPIOA->PUPDR   = 0b00010100000000000000000000000000; //A13,A14 is pull-up,other is none.
 	             //    15141312111009080706050403020100
 	             //     | | | | | | | | | | | | | | | |
-	GPIOB->MODER   = 0b00000000000000000000101010001010;
-	GPIOB->OSPEEDR = 0b00000000000000000000000100000101;
+	GPIOB->MODER   = 0b00000000000000000000101010001010; //B0,B1,B3~5 is AF, B2, B6~15 is input.
+	GPIOB->OSPEEDR = 0b00000000000000000000000100000101; //B0~1,B4 is medium, other is low speed.
 	             //    15141312111009080706050403020100
 	             //     | | | | | | | | | | | | | | | |
-	GPIOF->MODER   = 0b00000000000000000000000000000001;
+	GPIOF->MODER   = 0b00000000000000000000000000000001; //F0 is out.
 	GPIOF->OSPEEDR = 0b00000000000000000000000000000000;
 	             //    15141312111009080706050403020100
 	             //     | | | | | | | | | | | | | | | |
@@ -659,55 +659,55 @@ int main()
 		OC4 is used to trigger the ADC.
 	*/
 
-	TIM1->CR1 = 0b01UL<<5 /*centermode 1*/;
-	TIM1->CR2 = 0b010UL<<4 /*Update event sends trigger output TRGO*/;
+	TIM1->CR1 = TIM_CR1_CMS_0 /*centermode 1*/;
+	TIM1->CR2 = TIM_CR2_MMS_1 /*Update event sends trigger output TRGO*/;
 //	TIM1->CR2 = 0b111UL<<4 /*OC4REF --> TRGO*/;
 
-	TIM1->CCMR1 = 1UL<<3 /*OC1 Preload enable*/ | 0b110UL<<4 /*OC1 PWMmode 1*/ |
-	              1UL<<11 /*OC2 Preload Enable*/| 0b110UL<<12 /*OC2 PWMmode 1*/;
-	TIM1->CCMR2 = 1UL<<3 /*OC3 Preload enable*/ | 0b110UL<<4 /*OC3 PWMmode 1*/ |
-	              0b011UL<<12 /*OC4 toggle-on-match mode*/;
-	TIM1->CCER =  1UL<<0 /*OC1 on*/ | 1UL<<2 /*OC1 complementary output enable*/ |
-	              1UL<<4 /*OC2 on*/ | 1UL<<6 /*OC2 complementary output enable*/;
+	TIM1->CCMR1 = TIM_CCMR1_OC1PE /*OC1 Preload enable*/ | (TIM_CCMR1_IC1F_2 | TIM_CCMR1_IC1F_1) /*OC1 PWMmode 1*/ |
+			TIM_CCMR1_OC2PE /*OC2 Preload Enable*/ | (TIM_CCMR1_IC2F_2 | TIM_CCMR1_IC2F_1) /*OC2 PWMmode 1*/;
+	TIM1->CCMR2 = TIM_CCMR2_OC3PE /*OC3 Preload enable*/ | (TIM_CCMR2_IC3F_2 | TIM_CCMR2_IC3F_1) /*OC3 PWMmode 1*/ |
+			(TIM_CCMR2_IC4F_1 | TIM_CCMR2_IC4F_0) /*OC4 toggle-on-match mode*/;
+	TIM1->CCER =  TIM_CCER_CC1E /*OC1 on*/ | TIM_CCER_CC1NE /*OC1 complementary output enable*/ |
+			TIM_CCER_CC2E /*OC2 on*/ | TIM_CCER_CC2NE /*OC2 complementary output enable*/;
 
 	TIM1->ARR = 1024; // 23.4 kHz
 
-	TIM1->CCER |= 1UL<<8 /*OC3 on*/ | 1UL<<10 /*OC3 complementary output enable*/; // third phase for BLDC
+	TIM1->CCER |= TIM_CCER_CC3E /*OC3 on*/ | TIM_CCER_CC3NE /*OC3 complementary output enable*/; // third phase for BLDC
 
 
 	TIM1->CCR1 = 512;
 	TIM1->CCR2 = 512;
 	TIM1->CCR3 = 512;
 	TIM1->CCR4 = 1020; // Generate the ADC trigger right after the start of the switch period.
-	TIM1->BDTR = 1UL<<15 /*Main output enable*/ | 1UL /*21ns deadtime*/;
-	TIM1->EGR |= 1; // Generate Reinit+update
-	TIM1->DIER = 1UL /*Update interrupt enable*/;
-	TIM1->CR1 |= 1; // Enable the timer
+	TIM1->BDTR = TIM_BDTR_MOE /*Main output enable*/ | TIM_BDTR_DTG_0 /*21ns deadtime*/;
+	TIM1->EGR |= TIM_EGR_UG; // Generate Reinit+update
+	TIM1->DIER = TIM_DIER_UIE /*Update interrupt enable*/;
+	TIM1->CR1 |= TIM_CR1_CEN; // Enable the timer
 
 	set_prot_lim(5000);
-	DAC->CR |= 1; // enable, defaults good otherwise.
+	DAC->CR |= DAC_CR_EN1; // enable, defaults good otherwise.
 
 	// DMA: channel 3 for SPI TX.
 	DMA1_Channel3->CPAR = (uint32_t)&(SPI1->DR);
 	DMA1_Channel3->CMAR = (uint32_t)(&spi_tx_data);
 	DMA1_Channel3->CNDTR = SPI_DATAGRAM_LEN;
-	DMA1_Channel3->CCR = 0b10<<12 /*hi prio*/ | 0b01<<10 /*16-bit mem*/ | 0b01<<8 /*16-bit periph*/ | 1<<7 /* mem increment*/ |
-	                     1<<5 /*circular*/ | 1<<4 /*dir: mem->spi*/;
+	DMA1_Channel3->CCR = DMA_CCR_PL_1 /*hi prio*/| DMA_CCR_MSIZE_0 /*16-bit mem*/| DMA_CCR_PSIZE_0 /*16-bit periph*/
+							| DMA_CCR_MINC /* mem increment*/| DMA_CCR_CIRC /*circular*/| DMA_CCR_DIR /*dir: mem->spi*/;
 
 	// DMA: channel 2 for SPI RX
 	DMA1_Channel2->CPAR = (uint32_t)&(SPI1->DR);
 	DMA1_Channel2->CMAR = (uint32_t)(&spi_rx_data);
 	DMA1_Channel2->CNDTR = SPI_DATAGRAM_LEN;
-	DMA1_Channel2->CCR = 0b10<<12 /*hi prio*/ | 0b01<<10 /*16-bit mem*/ | 0b01<<8 /*16-bit periph*/ | 1<<7 /* mem increment*/ |
-	                     1<<5 /*circular*/ | 0<<4 /*dir: spi->mem*/;
+	DMA1_Channel2->CCR = DMA_CCR_PL_1 /*hi prio*/| DMA_CCR_MSIZE_0 /*16-bit mem*/| DMA_CCR_PSIZE_0 /*16-bit periph*/
+			| DMA_CCR_MINC /* mem increment*/| DMA_CCR_CIRC /*circular*/&( ~DMA_CCR_DIR) /*dir: spi->mem*/;
 
 	delay_ms(100); // let the main cpu boot, so that nCS is definitely up.
 
-	DMA1_Channel3->CCR |= 1; // enable
-	DMA1_Channel2->CCR |= 1; // enable
+	DMA1_Channel3->CCR |= DMA_CCR_EN; // enable
+	DMA1_Channel2->CCR |= DMA_CCR_EN; // enable
 
-	SPI1->CR2 = 0b1111UL<<8 /*16-bit*/ | 1UL<<1 /* TX DMA enable */ | 1UL<<0 /* RX DMA enable*/;
-	SPI1->CR1 = 1UL<<6; // Enable SPI - zeroes good otherwise.
+	SPI1->CR2 = SPI_CR2_DS /*16-bit*/ | SPI_CR2_TXDMAEN /* TX DMA enable */ | SPI_CR2_RXDMAEN /* RX DMA enable*/;
+	SPI1->CR1 = SPI_CR1_SPE; // Enable SPI - zeroes good otherwise.
 
 
 	// DMA: channel 1 for ADC.
@@ -717,20 +717,20 @@ int main()
 	DMA1_Channel1->CCR = 0b011010110101000UL; // very high prio, 16b->16b, MemIncrement, circular, transfer error interrupt
 
 	// Enable and self-calibrate ADC.
-	ADC1->CFGR2 = 0b10UL << 30; // PCLK/4, 12 MHz clock
+	ADC1->CFGR2 = ADC_CFGR2_CKMODE_1; // PCLK/4, 12 MHz clock, ADC asynchronous clock, asynchronous with the APB clock
 	delay_us(100);
 	ADC1->CR |= ADC_CR_ADCAL;
 	while((ADC1->CR & ADC_CR_ADCAL) != 0);
 
-	ADC1->CFGR1 = ADC_CFGR1_DMACFG | ADC_CFGR1_DMAEN | 0b01UL<<10 /*10:HW trigger rising edge*/ | 0UL<<6 /*TIM1 trigger*/ | 01UL<<3 /*10-bit reso*/ | 1UL<<2 /*dir*/;
-	ADC1->SMPR = 0b001UL; // Sampling time = 7.5 ADC clock cycles 
+	ADC1->CFGR1 = ADC_CFGR1_DMACFG | ADC_CFGR1_DMAEN | ADC_CFGR1_EXTEN_0 /*10:HW trigger rising edge*/ | (ADC_CFGR1_EXTSEL^ADC_CFGR1_EXTSEL) /*TIM1 trigger*/ | ADC_CFGR1_RES_0 /*10-bit reso*/ | ADC_CFGR1_SCANDIR /* backward scan dir*/;
+	ADC1->SMPR = ADC_SMPR_SMP_0; // Sampling time = 7.5 ADC clock cycles 
 
-	ADC1->CHSELR = 1UL<<6 | 1UL<<5;
-	DMA1_Channel1->CCR |= 1UL;
+	ADC1->CHSELR = ADC_CHSELR_CHSEL5 | ADC_CHSELR_CHSEL6;
+	DMA1_Channel1->CCR |= DMA_CCR_EN;
 	ADC1->CR |= ADC_CR_ADEN;
 	while((ADC1->ISR & ADC_ISR_ADRDY) == 0);
 
-	ADC1->CR |= 1UL<<2; // start
+	ADC1->CR |= ADC_CR_ADSTART; // start
 
 	NVIC_EnableIRQ(SPI1_IRQn);
 	NVIC_EnableIRQ(TIM1_BRK_UP_TRG_COM_IRQn);

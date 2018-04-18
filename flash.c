@@ -41,7 +41,7 @@ extern unsigned int _SETTINGSI_BEGIN;
 void spi1_poll_tx(uint16_t d) __attribute__((section(".flasher")));
 void spi1_poll_tx(uint16_t d)
 {
-	while(!(SPI1->SR & (1UL<<1))) ;
+	while(!(SPI1->SR & SPI_SR_TXE)) ;
 	SPI1->DR = d;
 }
 
@@ -49,7 +49,7 @@ void spi1_poll_tx(uint16_t d)
 uint16_t spi1_poll_rx() __attribute__((section(".flasher")));
 uint16_t spi1_poll_rx()
 {
-	while(!(SPI1->SR & (1UL<<0))) ;
+	while(!(SPI1->SR & SPI_SR_RXNE)) ;
 	return SPI1->DR;
 }
 
@@ -57,7 +57,7 @@ uint16_t spi1_poll_rx()
 void spi1_empty_rx() __attribute__((section(".flasher")));
 void spi1_empty_rx()
 {
-	while(SPI1->SR&(0b11<<9)) SPI1->DR;
+	while(SPI1->SR & SPI_SR_FRLVL) SPI1->DR;
 }
 
 extern void delay_ms(uint32_t i) __attribute__((section(".flasher")));
@@ -66,7 +66,7 @@ extern void delay_us(uint32_t i) __attribute__((section(".flasher")));
 void unlock_flash() __attribute__((section(".flasher")));
 void unlock_flash()
 {
-	if(FLASH->CR & (1UL<<7))
+	if(FLASH->CR & FLASH_CR_LOCK)
 	{
 		FLASH->KEYR = 0x45670123;
 		FLASH->KEYR = 0xCDEF89AB;
@@ -76,23 +76,23 @@ void unlock_flash()
 void lock_flash() __attribute__((section(".flasher")));
 void lock_flash()
 {
-	FLASH->CR |= 1UL<<7;
+	FLASH->CR |= FLASH_CR_LOCK;
 }
 
 void erase_page(uint32_t addr) __attribute__((section(".flasher")));
 void erase_page(uint32_t addr)
 {
-	while(FLASH->SR & 1) ; // Poll busy bit
-	FLASH->CR |= 1UL<<1; // Page erase
+	while(FLASH->SR & FLASH_SR_BSY) ; // Poll busy bit
+	FLASH->CR |= FLASH_CR_PER; // Page erase
 	FLASH->AR = addr;
-	FLASH->CR |= 1UL<<6; // Start
+	FLASH->CR |= FLASH_CR_STRT; // Start
 	__asm__ __volatile__ ("nop");
-	while(FLASH->SR & 1) ; // Poll busy bit
-	while(!(FLASH->SR & (1UL<<5))) ; // Poll End Of Operation bit
-	FLASH->SR |= 1UL<<5; // Clear End Of Operation bit by writing '1'
+	while(FLASH->SR & FLASH_SR_BSY) ; // Poll busy bit
+	while(!(FLASH->SR & FLASH_CR_OPTER)) ; // Poll End Of Operation bit
+	FLASH->SR |= FLASH_CR_OPTER; // Clear End Of Operation bit by writing '1'
 
 	__asm__ __volatile__ ("nop");
-	while(FLASH->SR & 1) ; // Poll busy bit
+	while(FLASH->SR & FLASH_SR_BSY) ; // Poll busy bit
 
 	// STM32 documentation workaround: PAGE ERASE BIT MUST BE CLEARED!!! This is undocumented.
 	// Writing PG bit fails without any warning or error flags if PER is not cleared.
@@ -104,7 +104,7 @@ void spi_flash_program(int size)
 {
 	int i;
 
-	FLASH->CR = 1UL; // Activate programming
+	FLASH->CR = FLASH_CR_PG; // Activate programming
 
 	uint16_t* p_flash = (uint16_t*)FLASH_OFFSET;
 
@@ -113,10 +113,10 @@ void spi_flash_program(int size)
 		*p_flash = spi1_poll_rx();
 		spi1_poll_tx(0x1111);
 		p_flash++;
-		while(FLASH->SR & 1) ; // Poll busy bit
+		while(FLASH->SR & FLASH_SR_BSY) ; // Poll busy bit
 	}
 
-	FLASH->SR |= 1UL<<5; // Clear End Of Operation bit by writing '1'
+	FLASH->SR |= FLASH_SR_EOP; // Clear End Of Operation bit by writing '1'
 	FLASH->CR = 0; // Clear programming bit.
 }
 
