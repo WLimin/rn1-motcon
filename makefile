@@ -22,9 +22,7 @@ all: $(BUILD_DIR)/$(TARGET).bin
 
 $(BUILD_DIR)/%.o: %.c $(DEPS) | $(BUILD_DIR)
 	$(CC) -c -o $@ $< $(CFLAGS)
-clean: 
-	rm $(OBJ) $(STACK_USE)
-
+	
 $(BUILD_DIR):
 	mkdir $@
 

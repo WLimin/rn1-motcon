@@ -7,6 +7,15 @@ STM32F051C6Tx STM32F051C6Ux LQFP48  39 IOs,32K+8K,48MHz
 STM32F051K6Tx STM32F051K6Ux LQFP32  25/27 IOs
 STM32F051R6Tx               LQFP64  55 IOs
 
+You can download the referance documents from the ST's web.
+
+doc/AN4088.pdf
+doc/DS8668.pdf
+doc/ES0202.pdf
+doc/PM0215.pdf
+doc/RM0091.pdf
+
+
 LED      F0    // On=1
 EN_GATE  A11   // Gates enabled, or just freewheeling.
 EN_DCCAL A12   //Current sense amplifier DC offset measurement magic: this prevents normal operation.
@@ -60,3 +69,4 @@ typedef union {
     uint16_t u16[SPI_DATAGRAM_LEN];	//Flash Magic
     int16_t  s16[SPI_DATAGRAM_LEN];
 } spi_rx_t;
+

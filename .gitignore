@@ -2,3 +2,6 @@
 *.su
 *.bin
 *.elf
+build/
+doc/
+.settings/
