@@ -16,6 +16,4 @@ char* o_str_append(char* str1, char* str2);
 char* o_str_cmp(char* str1, char* str2);
 char* o_atoi_append(char* str, int* val_out);
 
-
-
 #endif

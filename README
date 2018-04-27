@@ -1,5 +1,62 @@
 Motor Controller software for RN#1 robot.
 
-BLDC / brushed DC motor controller.
+BLDC / brushed DC hub motor controller.
 
-Based on STM32F0??? Cortex M0 MCU.
+Based on STM32F051 Cortex M0 MCU. flash is 32k
+STM32F051C6Tx STM32F051C6Ux LQFP48  39 IOs,32K+8K,48MHz
+STM32F051K6Tx STM32F051K6Ux LQFP32  25/27 IOs
+STM32F051R6Tx               LQFP64  55 IOs
+
+LED      F0    // On=1
+EN_GATE  A11   // Gates enabled, or just freewheeling.
+EN_DCCAL A12   //Current sense amplifier DC offset measurement magic: this prevents normal operation.
+HALL_A   B8    // Halls
+HALL_B   B7
+HALL_C   B6
+OVERCURR A14   // FET Rds(on) based crude overcurrent info from the fet driver
+
+It has 3 phase complementary PWM output based TIM1.
+
+STM32F103 STM32F051
+PD0         PF0   OSC_IN
+PD1         PF1   OSC_OUT
+VSS_4       PF4
+VDD_4       PF5
+VSS_2       PF6
+VDD_2       PF7
+BOOT1-PB2   PB2 F0X1 just only use boot1
+
+Protocol:
+The SPI communation speed is 7.5 MHz.
+MESSAGES Brain <-->RN#1 (aka commands)
+
+#define SPI_DATAGRAM_LEN 8
+typedef union {
+    struct __attribute__((packed)) {
+        uint16_t status;				//Is it used?
+        int16_t speed;				//Degree/s
+        int16_t current;				//The unit is mA.
+        int16_t pos;					//count of Hall passed.
+        uint8_t cur_limit_mul;
+        uint8_t num_hard_limits;
+        uint16_t res6;
+        uint16_t magic;
+    };
+    uint16_t u16[SPI_DATAGRAM_LEN];
+    int16_t  s16[SPI_DATAGRAM_LEN];
+} spi_tx_t;
+
+typedef union {
+    struct __attribute__((packed)) {
+        uint16_t state;
+        int16_t speed;
+        int16_t cur_limit;
+        uint16_t res3;		//imax(H8), feedfwd(Low8)
+        uint16_t res4;		//pterm(H8), iterm(Low8)
+        uint16_t res5;		//dterm(H8)
+        uint16_t res6;
+        uint16_t magic;
+    };
+    uint16_t u16[SPI_DATAGRAM_LEN];	//Flash Magic
+    int16_t  s16[SPI_DATAGRAM_LEN];
+} spi_rx_t;

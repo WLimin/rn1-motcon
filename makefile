@@ -1,67 +1,77 @@
 # This makefile is made to work with the toolchain downloadable at https://launchpad.net/gcc-arm-embedded
-
+# STM32F051C6/R6
 CC = arm-none-eabi-gcc
 LD = arm-none-eabi-gcc
 SIZE = arm-none-eabi-size
 OBJCOPY = arm-none-eabi-objcopy
+
+# Build path
+BUILD_DIR = build
+TARGET = motcon
 
 CFLAGS = -I. -Os -fno-common -ffunction-sections -ffreestanding -fno-builtin -mthumb -mcpu=cortex-m0 -Wall -fstack-usage -Winline -DPCB1B
 ASMFLAGS = -S -fverbose-asm
 LDFLAGS = -mcpu=cortex-m0 -mthumb -nostartfiles -gc-sections
 
 DEPS = main.h own_std.h flash.h
-OBJ = stm32init.o main.o own_std.o flash.o
-ASMS = stm32init.s main.s own_std.s flash.s
-STACK_USE = stm32init.su main.su own_std.su flash.su
+OBJ = $(BUILD_DIR)/stm32init.o $(BUILD_DIR)/main.o $(BUILD_DIR)/own_std.o $(BUILD_DIR)/flash.o
+ASMS = $(BUILD_DIR)/stm32init.s $(BUILD_DIR)/main.s $(BUILD_DIR)/own_std.s $(BUILD_DIR)/flash.s
+STACK_USE = $(BUILD_DIR)/stm32init.su $(BUILD_DIR)/main.su $(BUILD_DIR)/own_std.su $(BUILD_DIR)/flash.su
 
-all: main.bin
+all: $(BUILD_DIR)/$(TARGET).bin
 
-%.o: %.c $(DEPS)
+$(BUILD_DIR)/%.o: %.c $(DEPS) | $(BUILD_DIR)
 	$(CC) -c -o $@ $< $(CFLAGS)
 clean: 
 	rm $(OBJ) $(STACK_USE)
 
-main.bin: $(OBJ)
-	$(LD) -Tstm32.ld $(LDFLAGS) -o main.elf $^
-	$(OBJCOPY) -Obinary main.elf main_full.bin
-	$(OBJCOPY) -Obinary --remove-section=.flasher --remove-section=.settings main.elf main.bin
-	$(SIZE) main.elf
+$(BUILD_DIR):
+	mkdir $@
 
-flash_full: main.bin
-	stm32sprog -d /dev/ttyUSB0 -b 230400 -vw main_full.bin
+clean:
+	-rm -fR .dep $(BUILD_DIR)
 
-flash: main.bin
-	stm32sprog -d /dev/ttyUSB0 -b 230400 -vw main.bin
+$(BUILD_DIR)/$(TARGET).bin: $(OBJ) | $(BUILD_DIR)
+	$(LD) -Tstm32.ld $(LDFLAGS) -o $(BUILD_DIR)/$(TARGET).elf $^
+	$(OBJCOPY) -Obinary $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET)_full.bin
+	$(OBJCOPY) -Obinary --remove-section=.flasher --remove-section=.settings $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).bin
+	$(SIZE) $(BUILD_DIR)/$(TARGET).elf
 
-f: main.bin
-	scp main.bin hrst@$(robot):~/rn1-tools/motcon.bin
+flash_full: $(BUILD_DIR)/$(TARGET).bin
+	stm32sprog -d /dev/ttyUSB0 -b 230400 -vw $(BUILD_DIR)/$(TARGET)_full.bin
 
-f_local: main.bin
-	../rn1-tools/mcprog /dev/ttyUSB0 ./main.bin 4
-	../rn1-tools/mcprog /dev/ttyUSB0 ./main.bin 3
+flash: $(BUILD_DIR)/$(TARGET).bin
+	stm32sprog -d /dev/ttyUSB0 -b 230400 -vw $(BUILD_DIR)/$(TARGET).bin
 
-f4: main.bin
-	../rn1-tools/mcprog /dev/ttyUSB0 ./main.bin 4
+f: $(BUILD_DIR)/$(TARGET).bin
+	scp $(BUILD_DIR)/$(TARGET).bin hrst@$(robot):~/rn1-tools/$(TARGET).bin
 
-f3: main.bin
-	../rn1-tools/mcprog /dev/ttyUSB0 ./main.bin 3
+f_local: $(BUILD_DIR)/$(TARGET).bin
+	../rn1-tools/mcprog /dev/ttyUSB0 $(BUILD_DIR)/$(TARGET).bin 4
+	../rn1-tools/mcprog /dev/ttyUSB0 $(BUILD_DIR)/$(TARGET).bin 3
 
-ff: main.bin
-	scp main.bin hrst@proto4:~/rn1-tools/motcon.bin
+f4: $(BUILD_DIR)/$(TARGET).bin
+	../rn1-tools/mcprog /dev/ttyUSB0 $(BUILD_DIR)/$(TARGET).bin 4
 
-stack:
-	cat *.su
+f3: $(BUILD_DIR)/$(TARGET).bin
+	../rn1-tools/mcprog /dev/ttyUSB0 $(BUILD_DIR)/$(TARGET).bin 3
+
+ff: $(BUILD_DIR)/$(TARGET).bin
+	scp $(BUILD_DIR)/$(TARGET).bin hrst@proto4:~/rn1-tools/$(TARGET).bin
+
+stack: $(BUILD_DIR)
+	cat $(BUILD_DIR)/*.su
 
 sections:
-	arm-none-eabi-objdump -h main.elf
+	arm-none-eabi-objdump -h $(BUILD_DIR)/$(TARGET).elf
 
 syms:
-	arm-none-eabi-objdump -t main.elf
+	arm-none-eabi-objdump -t $(BUILD_DIR)/$(TARGET).elf
 
-%.s: %.c $(DEPS)
+$(BUILD_DIR)/%.s: %.c $(DEPS) | $(BUILD_DIR)
 	$(CC) -c -o $@ $< $(CFLAGS) $(ASMFLAGS)
 
 asm: $(ASMS)
 
-e: 
+e:
 	gedit --new-window main.c main.h flash.c flash.h stm32init.c &
