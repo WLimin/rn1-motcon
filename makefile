@@ -13,16 +13,27 @@ CFLAGS = -I. -Os -fno-common -ffunction-sections -ffreestanding -fno-builtin -mt
 ASMFLAGS = -S -fverbose-asm
 LDFLAGS = -mcpu=cortex-m0 -mthumb -nostartfiles -gc-sections
 
-DEPS = main.h own_std.h flash.h
-OBJ = $(BUILD_DIR)/stm32init.o $(BUILD_DIR)/main.o $(BUILD_DIR)/own_std.o $(BUILD_DIR)/flash.o
-ASMS = $(BUILD_DIR)/stm32init.s $(BUILD_DIR)/main.s $(BUILD_DIR)/own_std.s $(BUILD_DIR)/flash.s
-STACK_USE = $(BUILD_DIR)/stm32init.su $(BUILD_DIR)/main.su $(BUILD_DIR)/own_std.su $(BUILD_DIR)/flash.su
+#DEPS = main.h own_std.h flash.h
+# C sources
+C_SOURCES = stm32init.c main.c own_std.c flash.c
+
+ASM_SOURCES =
+
+# list of objects
+OBJ = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
+vpath %.c $(sort $(dir $(C_SOURCES)))
+# list of ASM program objects
+OBJ += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
+vpath %.s $(sort $(dir $(ASM_SOURCES)))
+# list of ASM source file transed from C program
+ASMS += $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.s)))
+vpath %.c $(sort $(dir $(C_SOURCES)))
 
 all: $(BUILD_DIR)/$(TARGET).bin
 
 $(BUILD_DIR)/%.o: %.c $(DEPS) | $(BUILD_DIR)
 	$(CC) -c -o $@ $< $(CFLAGS)
-	
+
 $(BUILD_DIR):
 	mkdir $@
 
